@@ -8,53 +8,61 @@ from torch.utils.data import DataLoader
 
 
 class Encoder(nn.Module):
-    def __init__(self, latent_dim):
-        # Encoder for VAE
+    def __init__(self, latent_dims):
         super().__init__()
-
-        self.conv1 = nn.Conv2d(1, 4, 3)
-        self.pool = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(4, 16, 3)
-        self.conv3 = nn.Conv2d(16, 32, 3, 2)
-        self.fc = nn.Linear(128, latent_dim)
-
+        self.conv1 = nn.Conv2d(1, 8, 3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, 3, stride=2, padding=1)
+        self.batch2 = nn.BatchNorm2d(16)
+        self.conv3 = nn.Conv2d(16, 32, 3, stride=2, padding=0)
+        self.linear1 = nn.Linear(3*3*32, 128)
+        self.linear2 = nn.Linear(128, latent_dims) # generate latent 
+    
     def forward(self, x):
-        x = F.relu(self.pool(self.conv1(x)))
-        x = F.relu(self.pool(self.conv2(x)))
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
-        output = self.fc(x)
-        return output
+        x = F.relu(self.linear1(x))
+        z = self.linear2(x)
+        return z
 
 class VariationalEncoder(nn.Module):
-    def __init__(self, latent_dim):
-        # Encoder for VAE
+    def __init__(self, latent_dims):
         super().__init__()
+        self.conv1 = nn.Conv2d(1, 8, 3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(8, 16, 3, stride=2, padding=1)
+        self.batch2 = nn.BatchNorm2d(16)
+        self.conv3 = nn.Conv2d(16, 32, 3, stride=2, padding=0)
+        self.linear1 = nn.Linear(3*3*32, 128)
+        self.linear2_mu = nn.Linear(128, latent_dims) # Generate mus
+        self.linear2_sigma = nn.Linear(128, latent_dims) # Generate sigmas
 
-        self.conv1 = nn.Conv2d(1, 4, 3)
-        self.pool = nn.MaxPool2d(2)
-        self.conv2 = nn.Conv2d(4, 16, 3)
-        self.conv3 = nn.Conv2d(16, 32, 3, 2)
-        self.mean_fc = nn.Linear(128, latent_dim)
-        self.var_fc = nn.Linear(128, latent_dim)
-
+        self.N = torch.distributions.Normal(0,1)
+        # TODO: Try make below not hardcoded to GPU
+        self.N.loc = self.N.loc.cuda() # Make sampling on GPU
+        self.N.scale = self.N.scale.cuda() # Make sampling on GPU
+        self.kl = 0 
+    
     def forward(self, x):
-        x = F.relu(self.pool(self.conv1(x)))
-        x = F.relu(self.pool(self.conv2(x)))
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.batch2(self.conv2(x)))
         x = F.relu(self.conv3(x))
         x = torch.flatten(x, start_dim=1)
-        mean = self.mean_fc(x)
-        var = torch.exp(self.var_fc(x))
-        # Reparameterization trick
-        epsilon = torch.normal(0, 1, size=mean.shape)
-        z = mean + var * epsilon
+        x = F.relu(self.linear1(x))
+        mu = self.linear2_mu(x)
+        sigma = torch.exp(self.linear2_sigma(x))
+        z = mu + sigma * self.N.sample(mu.shape)
+        # Calculate KL Divergence
+        self.kl = (sigma**2+mu**2-torch.log(sigma)-1/2).mean()
         return z
 
 class Decoder(nn.Module):
-    def __init__(self, latent_dim):
+    # Can be used for Vanilla autoencoder or VAE 
+    # since variational only affects encoder.
+    def __init__(self, latent_dims):
         super().__init__()
         self.decoder_lin = nn.Sequential(
-            nn.Linear(latent_dim, 128),
+            nn.Linear(latent_dims, 128),
             nn.ReLU(True),
             nn.Linear(128, 3*3*32),
             nn.ReLU(True),
