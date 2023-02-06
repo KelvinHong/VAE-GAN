@@ -15,9 +15,12 @@ import os
 import argparse
 import matplotlib.pyplot as plt
 
+# Change configuration here
 EPOCHS = 50
 LATENT_DIM = 5
 LR = 0.005
+# Config ends
+
 MODEL_ROOT = "./models/"
 os.makedirs(MODEL_ROOT, exist_ok=True)
 
@@ -122,7 +125,7 @@ if __name__ == "__main__":
             if epoch == 1:
                 plt.legend()
             plt.title("AutoEncoder Training Progress")
-            plt.savefig(os.path.join(MODEL_ROOT, "first_ae.png"))
+            plt.savefig(os.path.join(MODEL_ROOT, os.path.splitext(model_name)[0] + ".png" ))
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 torch.save(model.state_dict(), model_path)
