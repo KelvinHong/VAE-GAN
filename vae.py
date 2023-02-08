@@ -14,6 +14,10 @@ from tqdm import tqdm
 import os
 import argparse
 import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.cluster import KMeans
+from sklearn.metrics import confusion_matrix
+import numpy as np
 
 # Change configuration here
 EPOCHS = 50
@@ -173,5 +177,23 @@ if __name__ == "__main__":
         plt.title("VAE Reconstruction; Top Original, Bottom Reconstructed.")
         plt.show()
 
-
-
+        # Inspect latent distribution by targets using all valid data
+        label_to_latent = {
+            i: [] for i in range(10)
+        }
+        for img, target in tqdm(valid_dataset, desc = "Inferencing"):
+            z = model.vencoder(img.to(device).unsqueeze(dim=0))
+            latent = z[0].tolist()
+            label_to_latent[target].append(latent)
+        # Calculate PCA
+        pca = PCA(n_components=3)
+        all_latents = np.concatenate([np.array(label_to_latent[i]) for i in range(10)], axis=0)
+        all_labels = [i for i in range(10) for j in range(1000)]
+        pca.fit(all_latents)
+        # print(pca.explained_variance_ratio_) # Variance doesn't concentrate on the first 3 dimensions
+        # Calculate Kmeans
+        kmeans = KMeans(n_clusters=10)
+        kmeans.fit(all_latents)
+        print("Confusion matrix of truth and clustered labels on latents:")
+        print("The more sparse, the better. It is better to be a permutation of a diagonal matrix.")
+        print(confusion_matrix(all_labels, kmeans.labels_))
