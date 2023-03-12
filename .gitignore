@@ -1,5 +1,6 @@
 # Datasets
 FashionMNIST/*
+MNIST/*
 models/*
 
 # Byte-compiled / optimized / DLL files

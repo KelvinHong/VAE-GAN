@@ -19,8 +19,10 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import confusion_matrix
 import numpy as np
 
+# Fixed configuration
+DATASETS = ["MNIST", "FashionMNIST", "CIFAR10", "CIFAR100", "CELEBA"]
 # Change configuration here
-EPOCHS = 50
+EPOCHS = 2
 LATENT_DIM = 5
 LR = 0.005
 # Config ends
@@ -78,30 +80,40 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
                     prog = 'Variatioanl AutoEncoder Handler',
                     description = """This program train or inference on 
-                            a Variational AutoEncoder on FashionMNIST Dataset.""")
+                            a Variational AutoEncoder.""")
     parser.add_argument('--train', action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument('-m', '--model-path', type=str, help="""
             During training, model will be saved on this path as MODEL_ROOT/[path], 
-                if not provided, the model will be saved as MODEL_ROOT/best_vae.pth.
             During inference, model weights will be loaded from this path as MODEL_ROOT/[path], 
-                can't be None. 
+                can't be None.
+        """)
+    parser.add_argument('-d', '--dataset', type=str, help=f"""
+            Choose a dataset to train on. 
+            Available options: {", ".join(DATASETS)}. 
         """)
     parser.add_argument('-s', '--seed', type=int, help="Torch Seed for result reproducibility.")
     args = parser.parse_args()
-    if (not args.train) and args.model_path is None:
-        raise ValueError("When inferencing, provide a path to a trained model using the -m flag.")
+    if args.model_path is None:
+        raise ValueError("Provide a path to save a trained model/from a saved trained model using the -m flag.")
     if args.seed is not None:
         torch.manual_seed(args.seed)
+        print(f"Specifying seed {args.seed}.")
+    if args.dataset is None:
+        raise ValueError(f"Please select a dataset using flag -d, available choices are {', '.join(DATASETS)}.")
+    elif args.dataset not in DATASETS:
+        raise ValueError(f"Please select a valid dataset using flag -d, available choices are {', '.join(DATASETS)}.")
+    else:
+        print(f"Dataset selected is {args.dataset}")
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')        
     print(f"PyTorch Training using device: {device}.")
-    train_dataset = torchvision.datasets.FashionMNIST(
+    train_dataset = getattr(torchvision.datasets, args.dataset)(
         root = "./",
         train = True, 
         download = True,
         transform = transforms.ToTensor()
     )
 
-    valid_dataset = torchvision.datasets.FashionMNIST(
+    valid_dataset = getattr(torchvision.datasets, args.dataset)(
         root = "./",
         train = False, 
         download = True,
@@ -115,8 +127,9 @@ if __name__ == "__main__":
         # Train Mode
         # TODO: Implement LR Scheduling
         print("Train Mode")
-        model = VAE(LATENT_DIM).to(device)
-        model_name = "best_vae.pth" if args.model_path is None else args.model_path
+        if args.dataset in ["MNIST", "FashionMNIST"]:
+            model = VAE(LATENT_DIM).to(device)
+        model_name = args.model_path
         model_path = os.path.join(MODEL_ROOT, model_name)
         optimizer = torch.optim.Adam(model.parameters(), lr=LR)
         criterion = nn.MSELoss()
@@ -159,7 +172,8 @@ if __name__ == "__main__":
         # Evaluation Mode
         # Randomly choose 10 images from valid_dataloader and compare with their reconstruction.
         print("Evaluation Mode")
-        model = VAE(LATENT_DIM).to(device)
+        if args.dataset in ["MNIST", "FashionMNIST"]:
+            model = VAE(LATENT_DIM).to(device)
         model_path = os.path.join(MODEL_ROOT, args.model_path)
         model.load_state_dict(torch.load(model_path))
         model.eval()
@@ -178,22 +192,24 @@ if __name__ == "__main__":
         plt.show()
 
         # Inspect latent distribution by targets using all valid data
-        label_to_latent = {
-            i: [] for i in range(10)
-        }
-        for img, target in tqdm(valid_dataset, desc = "Inferencing"):
-            z = model.vencoder(img.to(device).unsqueeze(dim=0))
-            latent = z[0].tolist()
-            label_to_latent[target].append(latent)
-        # Calculate PCA
-        pca = PCA(n_components=3)
-        all_latents = np.concatenate([np.array(label_to_latent[i]) for i in range(10)], axis=0)
-        all_labels = [i for i in range(10) for j in range(1000)]
-        pca.fit(all_latents)
-        # print(pca.explained_variance_ratio_) # Variance doesn't concentrate on the first 3 dimensions
-        # Calculate Kmeans
-        kmeans = KMeans(n_clusters=10)
-        kmeans.fit(all_latents)
-        print("Confusion matrix of truth and clustered labels on latents:")
-        print("The more sparse, the better. It is better to be a permutation of a diagonal matrix.")
-        print(confusion_matrix(all_labels, kmeans.labels_))
+        if args.dataset in ["MNIST", "FashionMNIST"]:
+            print("Clustering of 3D PCA results:")
+            label_to_latent = {
+                i: [] for i in range(10)
+            }
+            for img, target in tqdm(valid_dataset, desc = "Inferencing"):
+                z = model.vencoder(img.to(device).unsqueeze(dim=0))
+                latent = z[0].tolist()
+                label_to_latent[target].append(latent)
+            # Calculate PCA
+            pca = PCA(n_components=3)
+            all_latents = np.concatenate([np.array(label_to_latent[i]) for i in range(10)], axis=0)
+            all_labels = [i for i in range(10) for j in range(1000)]
+            pca.fit(all_latents)
+            # print(pca.explained_variance_ratio_) # Variance doesn't concentrate on the first 3 dimensions
+            # Calculate Kmeans
+            kmeans = KMeans(n_clusters=10)
+            kmeans.fit(all_latents)
+            print("Confusion matrix of truth and clustered labels on latents:")
+            print("The more sparse, the better. It is better to be a permutation of a diagonal matrix.")
+            print(confusion_matrix(all_labels, kmeans.labels_))

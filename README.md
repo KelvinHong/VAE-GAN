@@ -15,23 +15,20 @@ it can be used without issue.
 
 To train an AutoEncoder, run the code below. 
 ```
-python ae.py --train 
-python ae.py --train --model-path my_ae.pth
-python ae.py --train --model-path my_ae.pth --seed 100
+python ae.py --train --dataset MNIST --model-path my_ae.pth
+python ae.py --train --dataset MNIST --model-path my_ae.pth --seed 100
 ```
-If model path is not given, model will be saved in 
-`./models/best_ae.pth`, else it will be saved
-in `./models/{provided_path}`. 
+Trained model will be saved in `./models/{provided_path}`. 
 Training will also generate a png image showing metrics. 
 You may provide seed to ensure reproducibility.
+Run `python ae.py -h` to see a list of available dataset arguments. 
 
 Our evaluation takes 10 random images from the validation dataset,
 then plot them against their reconstructions. 
-Provide model path only. 
 Use seed to ensure reproducibility.
 ```
-python ae.py --model-path my_ae.pth
-python ae.py --model-path my_ae.pth --seed 100
+python ae.py --model-path --dataset MNIST my_ae.pth
+python ae.py --model-path --dataset MNIST my_ae.pth --seed 100
 ```
 ![Images reconstructed by a trained autoencoder.](./media/image_compare.png)
 ![Images reconstructed by a trained VAE.](./media/vae_compare.png)
